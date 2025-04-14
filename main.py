@@ -1,50 +1,84 @@
 import cv2
+import numpy as np
+import dearpygui.dearpygui as dpg
 import mediapipe as mp
 
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-mp_hands = mp.solutions.hands
+def main():
+    mp_hands = mp.solutions.hands
+    mp_drawing = mp.solutions.drawing_utils
+    mp_drawing_styles = mp.solutions.drawing_styles
+    
+    hands = mp_hands.Hands(
+        model_complexity=0,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
+    
+    capture = cv2.VideoCapture(0)
+    if not capture.isOpened():
+        print("Failed to open camera.")
+        return
 
-cap = cv2.VideoCapture(0)
-with mp_hands.Hands(
-    model_complexity=0,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5) as hands:
-  while cap.isOpened():
-    success, image = cap.read()
-    if not success:
-      print("Ignoring empty camera frame.")
-      continue
+    dpg.create_context()
 
-    # To improve performance, optionally mark the image as not writeable to
-    # pass by reference.
-    image.flags.writeable = False
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = hands.process(image)
+    display_width, display_height = 640, 360
 
-    # Draw the hand annotations on the image.
-    image.flags.writeable = True
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    if results.multi_hand_landmarks:
-      for hand_landmarks in results.multi_hand_landmarks:
-        mp_drawing.draw_landmarks(
-            image,
-            hand_landmarks,
-            mp_hands.HAND_CONNECTIONS,
-            mp_drawing_styles.get_default_hand_landmarks_style(),
-            mp_drawing_styles.get_default_hand_connections_style())
+    default_image = np.zeros((display_height, display_width, 4), dtype=np.uint8)
 
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:
-          cap.release()
-          cv2.destroyAllWindows()
-          exit()
-        else:
-          if key == ord('a'):
-            print(f"Landmarks Captured: {hand_landmarks.landmark}")
+    with dpg.texture_registry():
+        dpg.add_dynamic_texture(
+            width=display_width,
+            height=display_height,
+            default_value=default_image.flatten()/255.0,
+            tag="camera_texture"
+        )
 
-    # Flip the image horizontally for a selfie-view display.
-    cv2.imshow('MediaPipe Hands', cv2.flip(image, 1))
-    if cv2.waitKey(5) & 0xFF == 27:
-      break
-cap.release()
+    with dpg.window(label="Camera"):
+        dpg.add_image("camera_texture")
+
+    dpg.create_viewport(title="Camera Viewer", width=800, height=800)
+    dpg.setup_dearpygui()
+    dpg.show_viewport()
+
+    while dpg.is_dearpygui_running():
+        ret, frame = capture.read()
+        if ret:
+            # Resize frame for display
+            frame = cv2.resize(frame, (display_width, display_height))
+            
+            # Convert to RGB for MediaPipe
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Process frame with MediaPipe
+            rgb_frame.flags.writeable = False
+            results = hands.process(rgb_frame)
+            rgb_frame.flags.writeable = True
+            
+            # Draw hand landmarks 
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(
+                        rgb_frame,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                        mp_drawing_styles.get_default_hand_landmarks_style(),
+                        mp_drawing_styles.get_default_hand_connections_style()
+                    )
+
+                    # print(f"Landmarks Captured: {hand_landmarks.landmark}")
+            
+            frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2RGBA)
+            frame = np.fliplr(frame)
+
+            # Dear PyGui expects [0..1] floats for texture updates
+            dpg.set_value("camera_texture", frame.flatten() / 255.0)
+
+        dpg.render_dearpygui_frame()
+
+    hands.close()
+    capture.release()
+    dpg.destroy_context()
+
+if __name__ == "__main__":
+    main()
+
