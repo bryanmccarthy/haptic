@@ -2,11 +2,10 @@ import cv2
 import numpy as np
 import dearpygui.dearpygui as dpg
 import mediapipe as mp
-import json
 import os
-import datetime
+import csv
 
-def append_landmarks_to_file(landmarks, filename="saved_landmarks/all_landmarks.json"):
+def append_landmarks_to_file(landmarks, filename="saved_landmarks/landmarks.csv", target="space"):
     landmarks_data = []
     for hand_landmarks in landmarks:
         hand_data = []
@@ -19,30 +18,26 @@ def append_landmarks_to_file(landmarks, filename="saved_landmarks/all_landmarks.
         landmarks_data.append(hand_data)
     
     os.makedirs('saved_landmarks', exist_ok=True)
+
+    # CSV format: target, x1, y1, z1, x2, y2, z2, ..., x21, y21, z21
+    csv_file_exists = os.path.exists(filename)
     
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    with open(filename, 'a', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        
+        if not csv_file_exists:
+            header = ['target']
+            for i in range(21):
+                header.extend([f'x{i}', f'y{i}', f'z{i}'])
+            csv_writer.writerow(header)
+        
+        for hand_data in landmarks_data:
+            row = [target]
+            for landmark in hand_data:
+                row.extend([landmark['x'], landmark['y'], landmark['z']])
+            csv_writer.writerow(row)
     
-    entry = {
-        "timestamp": timestamp,
-        "landmarks": landmarks_data
-    }
-    
-    all_landmarks = []
-    if os.path.exists(filename):
-        try:
-            with open(filename, 'r') as f:
-                all_landmarks = json.load(f)
-        except json.JSONDecodeError:
-            print("Error reading landmarks file, starting fresh")
-            all_landmarks = []
-    
-    all_landmarks.append(entry)
-    
-    with open(filename, 'w') as f:
-        json.dump(all_landmarks, f, indent=2)
-    
-    print(f"Landmarks saved to {filename} with timestamp {timestamp}")
-    return timestamp
+    print(f"Landmarks saved to {filename}")
 
 def main():
     mp_hands = mp.solutions.hands
@@ -76,12 +71,14 @@ def main():
 
     current_landmarks = None
     saved_count = 0
-    landmarks_file = "saved_landmarks/all_landmarks.json"
 
     def save_current_landmarks():
         nonlocal saved_count
         if current_landmarks:
-            timestamp = append_landmarks_to_file(current_landmarks, landmarks_file)
+            timestamp = append_landmarks_to_file(
+                current_landmarks, 
+                target="space"
+            )
             saved_count += 1
             return timestamp
         else:
