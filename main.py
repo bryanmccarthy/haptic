@@ -2,6 +2,47 @@ import cv2
 import numpy as np
 import dearpygui.dearpygui as dpg
 import mediapipe as mp
+import json
+import os
+import datetime
+
+def append_landmarks_to_file(landmarks, filename="saved_landmarks/all_landmarks.json"):
+    landmarks_data = []
+    for hand_landmarks in landmarks:
+        hand_data = []
+        for landmark in hand_landmarks.landmark:
+            hand_data.append({
+                'x': landmark.x,
+                'y': landmark.y,
+                'z': landmark.z
+            })
+        landmarks_data.append(hand_data)
+    
+    os.makedirs('saved_landmarks', exist_ok=True)
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    entry = {
+        "timestamp": timestamp,
+        "landmarks": landmarks_data
+    }
+    
+    all_landmarks = []
+    if os.path.exists(filename):
+        try:
+            with open(filename, 'r') as f:
+                all_landmarks = json.load(f)
+        except json.JSONDecodeError:
+            print("Error reading landmarks file, starting fresh")
+            all_landmarks = []
+    
+    all_landmarks.append(entry)
+    
+    with open(filename, 'w') as f:
+        json.dump(all_landmarks, f, indent=2)
+    
+    print(f"Landmarks saved to {filename} with timestamp {timestamp}")
+    return timestamp
 
 def main():
     mp_hands = mp.solutions.hands
@@ -33,12 +74,55 @@ def main():
             tag="camera_texture"
         )
 
-    with dpg.window(label="Camera"):
+    current_landmarks = None
+    saved_count = 0
+    landmarks_file = "saved_landmarks/all_landmarks.json"
+
+    def save_current_landmarks():
+        nonlocal saved_count
+        if current_landmarks:
+            timestamp = append_landmarks_to_file(current_landmarks, landmarks_file)
+            saved_count += 1
+            return timestamp
+        else:
+            print("No hand landmarks detected to save")
+            return None
+
+    # Keyboard callback
+    def on_key_press(sender, app_data):
+        if app_data == 32:  # Space key
+            print("Space key pressed!")
+            timestamp = save_current_landmarks()
+            if timestamp:
+                print(f"Landmarks saved successfully at {timestamp}")
+                # Update the status text
+                dpg.set_value("status_text", f"Saved {saved_count} landmark sets")
+
+    # Create main window
+    with dpg.window(label="Hand Landmark Capture", tag="primary_window", width=300, height=150):
+        # TODO: move settings to sep window
+        dpg.add_text("Press SPACE to save hand landmarks")
+        
+        # Button alternative to keyboard
+        dpg.add_button(label="Save Landmarks", callback=lambda: save_current_landmarks())
+        dpg.add_button(label="Toggle Camera Window", callback=lambda: dpg.configure_item("camera_window", show=not dpg.is_item_visible("camera_window")))
+    
+    # Create camera window
+    with dpg.window(label="Camera", tag="camera_window", width=display_width + 20, height=display_height + 40, no_collapse=True):
         dpg.add_image("camera_texture")
 
-    dpg.create_viewport(title="Camera Viewer", width=800, height=800)
+    # Register key press handler
+    with dpg.handler_registry():
+        dpg.add_key_press_handler(key=32, callback=on_key_press)  # 32 = space
+
+    dpg.create_viewport(title="Hand Landmark Capture", width=1024, height=768)
     dpg.setup_dearpygui()
     dpg.show_viewport()
+    dpg.set_primary_window("primary_window", True)
+    
+    # Position camera window next to main window
+    main_win_pos = dpg.get_item_pos("primary_window")
+    dpg.set_item_pos("camera_window", [main_win_pos[0] + 320, main_win_pos[1]])
 
     while dpg.is_dearpygui_running():
         ret, frame = capture.read()
@@ -54,8 +138,11 @@ def main():
             results = hands.process(rgb_frame)
             rgb_frame.flags.writeable = True
             
-            # Draw hand landmarks 
+            # Update the current landmarks if hands are detected
             if results.multi_hand_landmarks:
+                current_landmarks = results.multi_hand_landmarks
+                
+                # Draw hand landmarks
                 for hand_landmarks in results.multi_hand_landmarks:
                     mp_drawing.draw_landmarks(
                         rgb_frame,
@@ -64,8 +151,8 @@ def main():
                         mp_drawing_styles.get_default_hand_landmarks_style(),
                         mp_drawing_styles.get_default_hand_connections_style()
                     )
-
-                    # print(f"Landmarks Captured: {hand_landmarks.landmark}")
+            else:
+                current_landmarks = None
             
             frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2RGBA)
             frame = np.fliplr(frame)
@@ -81,4 +168,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
