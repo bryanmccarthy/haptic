@@ -5,7 +5,7 @@ import mediapipe as mp
 import os
 import csv
 
-def append_landmarks_to_file(landmarks, filename="saved_landmarks/landmarks.csv", target="space"):
+def append_landmarks_to_file(landmarks, filename="saved_landmarks/landmarks.csv", target="default"):
     landmarks_data = []
     for hand_landmarks in landmarks:
         hand_data = []
@@ -58,7 +58,6 @@ def main():
     dpg.create_context()
 
     display_width, display_height = 640, 360
-
     default_image = np.zeros((display_height, display_width, 4), dtype=np.uint8)
 
     with dpg.texture_registry():
@@ -75,34 +74,31 @@ def main():
     def save_current_landmarks():
         nonlocal saved_count
         if current_landmarks:
-            timestamp = append_landmarks_to_file(
+            target = dpg.get_value("target_label") or "default"
+            append_landmarks_to_file(
                 current_landmarks, 
-                target="space"
+                target=target
             )
             saved_count += 1
-            return timestamp
-        else:
-            print("No hand landmarks detected to save")
-            return None
+            dpg.set_value("saved_count_text", f"Saved {saved_count} Example(s)")
 
     # Keyboard callback
     def on_key_press(sender, app_data):
         if app_data == 32:  # Space key
             print("Space key pressed!")
-            timestamp = save_current_landmarks()
-            if timestamp:
-                print(f"Landmarks saved successfully at {timestamp}")
-                # Update the status text
-                dpg.set_value("status_text", f"Saved {saved_count} landmark sets")
+            save_current_landmarks()
 
     # Create main window
     with dpg.window(label="Hand Landmark Capture", tag="primary_window", width=300, height=150):
-        # TODO: move settings to sep window
-        dpg.add_text("Press SPACE to save hand landmarks")
-        
-        # Button alternative to keyboard
-        dpg.add_button(label="Save Landmarks", callback=lambda: save_current_landmarks())
         dpg.add_button(label="Toggle Camera Window", callback=lambda: dpg.configure_item("camera_window", show=not dpg.is_item_visible("camera_window")))
+        dpg.add_button(label="Settings", callback=lambda: dpg.configure_item("settings_window", show=not dpg.is_item_visible("settings_window")))
+    
+    # Create settings window
+    with dpg.window(label="Settings", tag="settings_window", width=300, height=200, show=True):
+        dpg.add_text("Press SPACE to save hand landmarks")
+        dpg.add_button(label="Save Landmarks", callback=lambda: save_current_landmarks())
+        dpg.add_input_text(label="Gesture", default_value="", tag="target_label")
+        dpg.add_text("Saved 0 Example(s)", tag="saved_count_text")
     
     # Create camera window
     with dpg.window(label="Camera", tag="camera_window", width=display_width + 20, height=display_height + 40, no_collapse=True):
@@ -117,9 +113,10 @@ def main():
     dpg.show_viewport()
     dpg.set_primary_window("primary_window", True)
     
-    # Position camera window next to main window
+    # Position windows
     main_win_pos = dpg.get_item_pos("primary_window")
-    dpg.set_item_pos("camera_window", [main_win_pos[0] + 320, main_win_pos[1]])
+    dpg.set_item_pos("camera_window", [main_win_pos[0] + 350, main_win_pos[1] + 15])
+    dpg.set_item_pos("settings_window", [main_win_pos[0] + 15, main_win_pos[1] + 170])
 
     while dpg.is_dearpygui_running():
         ret, frame = capture.read()
@@ -150,7 +147,7 @@ def main():
                     )
             else:
                 current_landmarks = None
-            
+
             frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2RGBA)
             frame = np.fliplr(frame)
 
