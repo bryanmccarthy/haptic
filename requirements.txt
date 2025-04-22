@@ -2,4 +2,7 @@ dearpygui
 opencv-python
 mediapipe
 numpy
+pandas
+tensorflow
+mediapipe-model-maker
 

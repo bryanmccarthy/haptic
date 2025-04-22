@@ -5,21 +5,11 @@ import mediapipe as mp
 import os
 import csv
 
-def append_landmarks_to_file(landmarks, filename="saved_landmarks/landmarks.csv", target="default"):
-    landmarks_data = []
-    for hand_landmarks in landmarks:
-        hand_data = []
-        for landmark in hand_landmarks.landmark:
-            hand_data.append({
-                'x': landmark.x,
-                'y': landmark.y,
-                'z': landmark.z
-            })
-        landmarks_data.append(hand_data)
-    
+def append_landmarks_to_file(results, filename="saved_landmarks/landmarks.csv", target="default"):
     os.makedirs('saved_landmarks', exist_ok=True)
-
-    # CSV format: target, x1, y1, z1, x2, y2, z2, ..., x21, y21, z21
+    
+    # Format as per comment:
+    # target, x0-x20, y0-y20, z0-z20, wx0-wx20, wy0-wy20, wz0-wz20, h0, h1
     csv_file_exists = os.path.exists(filename)
     
     with open(filename, 'a', newline='') as csvfile:
@@ -27,14 +17,41 @@ def append_landmarks_to_file(landmarks, filename="saved_landmarks/landmarks.csv"
         
         if not csv_file_exists:
             header = ['target']
+            # Screen landmarks x, y, z coordinates
             for i in range(21):
                 header.extend([f'x{i}', f'y{i}', f'z{i}'])
+            # World landmarks wx, wy, wz coordinates
+            for i in range(21):
+                header.extend([f'wx{i}', f'wy{i}', f'wz{i}'])
+            # Handedness 
+            header.extend(['h0', 'h1'])
             csv_writer.writerow(header)
         
-        for hand_data in landmarks_data:
+        for i, hand_landmarks in enumerate(results.multi_hand_landmarks):
             row = [target]
-            for landmark in hand_data:
-                row.extend([landmark['x'], landmark['y'], landmark['z']])
+            
+            # Add regular landmark coordinates
+            for landmark in hand_landmarks.landmark:
+                row.extend([landmark.x, landmark.y, landmark.z])
+            
+            # Add world landmark coordinates if available
+            if results.multi_hand_world_landmarks and i < len(results.multi_hand_world_landmarks):
+                for world_landmark in results.multi_hand_world_landmarks[i].landmark:
+                    row.extend([world_landmark.x, world_landmark.y, world_landmark.z])
+            else:
+                # Add placeholder world coordinates if not available
+                for _ in range(21):
+                    row.extend([0.0, 0.0, 0.0])
+            
+            # Add hand type indicator (left/right hand)
+            if results.multi_handedness and i < len(results.multi_handedness):
+                handedness = results.multi_handedness[i].classification[0].label
+                h0 = 1 if handedness == "Left" else 0
+                h1 = 1 if handedness == "Right" else 0
+                row.extend([h0, h1])
+            else:
+                row.extend([0, 0])  # Placeholder when hand type is unknown
+            
             csv_writer.writerow(row)
     
     print(f"Landmarks saved to {filename}")
@@ -68,15 +85,15 @@ def main():
             tag="camera_texture"
         )
 
-    current_landmarks = None
+    current_results = None
     saved_count = 0
 
     def save_current_landmarks():
         nonlocal saved_count
-        if current_landmarks:
+        if current_results and current_results.multi_hand_landmarks:
             target = dpg.get_value("target_label") or "default"
             append_landmarks_to_file(
-                current_landmarks, 
+                current_results, 
                 target=target
             )
             saved_count += 1
@@ -89,7 +106,7 @@ def main():
             save_current_landmarks()
 
     # Create main window
-    with dpg.window(label="Hand Landmark Capture", tag="primary_window", width=300, height=150):
+    with dpg.window(label="Hand Landmark Capture", tag="primary_window", width=300, height=200):
         dpg.add_button(label="Toggle Camera Window", callback=lambda: dpg.configure_item("camera_window", show=not dpg.is_item_visible("camera_window")))
         dpg.add_button(label="Settings", callback=lambda: dpg.configure_item("settings_window", show=not dpg.is_item_visible("settings_window")))
     
@@ -101,8 +118,9 @@ def main():
         dpg.add_text("Saved 0 Example(s)", tag="saved_count_text")
     
     # Create camera window
-    with dpg.window(label="Camera", tag="camera_window", width=display_width + 20, height=display_height + 40, no_collapse=True):
+    with dpg.window(label="Camera", tag="camera_window", width=display_width + 20, height=display_height + 55, no_collapse=True):
         dpg.add_image("camera_texture")
+        dpg.add_text("No gesture detected", tag="gesture_text")
 
     # Register key press handler
     with dpg.handler_registry():
@@ -116,7 +134,7 @@ def main():
     # Position windows
     main_win_pos = dpg.get_item_pos("primary_window")
     dpg.set_item_pos("camera_window", [main_win_pos[0] + 350, main_win_pos[1] + 15])
-    dpg.set_item_pos("settings_window", [main_win_pos[0] + 15, main_win_pos[1] + 170])
+    dpg.set_item_pos("settings_window", [main_win_pos[0] + 15, main_win_pos[1] + 220])
 
     while dpg.is_dearpygui_running():
         ret, frame = capture.read()
@@ -132,9 +150,9 @@ def main():
             results = hands.process(rgb_frame)
             rgb_frame.flags.writeable = True
             
-            # Update the current landmarks if hands are detected
+            # Update the current results if hands are detected
             if results.multi_hand_landmarks:
-                current_landmarks = results.multi_hand_landmarks
+                current_results = results
                 
                 # Draw hand landmarks
                 for hand_landmarks in results.multi_hand_landmarks:
@@ -146,7 +164,7 @@ def main():
                         mp_drawing_styles.get_default_hand_connections_style()
                     )
             else:
-                current_landmarks = None
+                current_results = None
 
             frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2RGBA)
             frame = np.fliplr(frame)
