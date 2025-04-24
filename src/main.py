@@ -43,12 +43,12 @@ class Haptic:
             dpg.add_button(label="Toggle Camera Window", 
                            callback=lambda: dpg.configure_item("camera_window", 
                                                              show=not dpg.is_item_visible("camera_window")))
-            dpg.add_button(label="Settings", 
-                           callback=lambda: dpg.configure_item("settings_window", 
-                                                             show=not dpg.is_item_visible("settings_window")))
+            dpg.add_button(label="Landmark Capture", 
+                           callback=lambda: dpg.configure_item("landmark_capture_window", 
+                                                             show=not dpg.is_item_visible("landmark_capture_window")))
         
-        # Create settings window
-        with dpg.window(label="Settings", tag="settings_window", width=300, height=200, show=True):
+        # Create landmark capture window
+        with dpg.window(label="Landmark Capture", tag="landmark_capture_window", width=300, height=200, show=True):
             dpg.add_text("Press SPACE to save hand landmarks")
             dpg.add_button(label="Save Landmarks", callback=lambda: self.save_current_landmarks())
             dpg.add_input_text(label="Gesture", default_value="", tag="target_label")
@@ -72,7 +72,7 @@ class Haptic:
         # Position windows
         main_win_pos = dpg.get_item_pos("primary_window")
         dpg.set_item_pos("camera_window", [main_win_pos[0] + 350, main_win_pos[1] + 15])
-        dpg.set_item_pos("settings_window", [main_win_pos[0] + 15, main_win_pos[1] + 220])
+        dpg.set_item_pos("landmark_capture_window", [main_win_pos[0] + 15, main_win_pos[1] + 220])
 
     def on_key_press(self, sender, app_data):
         if app_data == 32:  # Space key
