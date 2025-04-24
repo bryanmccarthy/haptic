@@ -28,7 +28,13 @@ class Haptic:
         self.display_width, self.display_height = 640, 360
         self.default_image = np.zeros((self.display_height, self.display_width, 4), dtype=np.uint8)
         
-        self.keypoint_classifier = KeypointClassifier()
+        self.keypoint_classifier = KeypointClassifier(
+            model_path="saved_landmarks/keypoint_classifier.h5",
+            label_path="saved_landmarks/keypoint_classifier_labels.txt"
+        )
+        
+        self.inference_mode = False
+        self.predicted_gesture = ""
         
     def setup_gui(self):
         dpg.create_context()
@@ -42,7 +48,7 @@ class Haptic:
             )
 
         # Create main window
-        with dpg.window(label="Hand Landmark Capture", tag="primary_window", width=300, height=200):
+        with dpg.window(label="Hand Landmark Capture", tag="primary_window", width=300, height=240):
             dpg.add_button(label="Toggle Camera Window", 
                            callback=lambda: dpg.configure_item("camera_window", 
                                                              show=not dpg.is_item_visible("camera_window")))
@@ -52,6 +58,9 @@ class Haptic:
             dpg.add_button(label="Train", 
                            callback=lambda: dpg.configure_item("train_window", 
                                                              show=not dpg.is_item_visible("train_window")))
+            with dpg.group(horizontal=True):
+                dpg.add_checkbox(label="Inference Mode", callback=self.toggle_inference_mode, tag="inference_mode_checkbox")
+                dpg.add_text("Off", tag="inference_mode_status")
         
         # Create landmark capture window
         with dpg.window(label="Landmark Capture", tag="landmark_capture_window", width=300, height=200, show=True):
@@ -62,9 +71,9 @@ class Haptic:
         
         # Create camera window
         with dpg.window(label="Camera", tag="camera_window", width=self.display_width + 20, 
-                      height=self.display_height + 55, no_collapse=True):
+                      height=self.display_height + 60, no_collapse=True):
             dpg.add_image("camera_texture")
-            dpg.add_text("No gesture detected", tag="gesture_text")
+            dpg.add_text("", tag="gesture_text")
             
         # Create train window
         with dpg.window(label="Train", tag="train_window", width=300, height=200, show=True):
@@ -147,6 +156,13 @@ class Haptic:
         
         print(f"Landmarks saved to {filename}")
     
+    def toggle_inference_mode(self, sender, app_data):
+        self.inference_mode = app_data
+        status_text = "On" if self.inference_mode else "Off"
+        dpg.set_value("inference_mode_status", status_text)
+        self.predicted_gesture = ""
+        dpg.set_value("gesture_text", self.predicted_gesture)
+        
     def process_frame(self, frame):
         frame = cv2.resize(frame, (self.display_width, self.display_height))
         
@@ -167,8 +183,29 @@ class Haptic:
                     self.mp_drawing_styles.get_default_hand_landmarks_style(),
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
+                
+            if self.inference_mode and self.keypoint_classifier.model is not None:
+                try:
+                    hand_landmarks = results.multi_hand_landmarks[0]
+                    
+                    keypoints = np.zeros(21 * 3)
+                    for i, lm in enumerate(hand_landmarks.landmark):
+                        keypoints[i] = lm.x
+                        keypoints[i + 21] = lm.y
+                        keypoints[i + 42] = lm.z
+                    
+                    gesture, confidence = self.keypoint_classifier.predict(keypoints.reshape(1, -1))
+                    self.predicted_gesture = f"{gesture} ({confidence:.2f})"
+                    dpg.set_value("gesture_text", self.predicted_gesture)
+                except Exception as e:
+                    print(f"Error during inference: {str(e)}")
+                    self.predicted_gesture = "Error during inference"
+                    dpg.set_value("gesture_text", self.predicted_gesture)
         else:
             self.current_results = None
+            if self.inference_mode:
+                self.predicted_gesture = "No hand detected"
+                dpg.set_value("gesture_text", self.predicted_gesture)
 
         frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2RGBA)
         frame = np.fliplr(frame)
