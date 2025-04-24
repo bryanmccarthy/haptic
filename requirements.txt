@@ -4,5 +4,4 @@ mediapipe
 numpy
 pandas
 tensorflow
-mediapipe-model-maker
 

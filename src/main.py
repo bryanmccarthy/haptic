@@ -8,7 +8,6 @@ import csv
 def append_landmarks_to_file(results, filename="saved_landmarks/landmarks.csv", target="default"):
     os.makedirs('saved_landmarks', exist_ok=True)
     
-    # Format as per comment:
     # target, x0-x20, y0-y20, z0-z20, wx0-wx20, wy0-wy20, wz0-wz20, h0, h1
     csv_file_exists = os.path.exists(filename)
     
