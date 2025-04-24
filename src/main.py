@@ -5,7 +5,7 @@ import mediapipe as mp
 import os
 import csv
 
-class HandLandmarkCapture:
+class Haptic:
     def __init__(self):
         self.mp_hands = mp.solutions.hands
         self.mp_drawing = mp.solutions.drawing_utils
@@ -185,7 +185,7 @@ class HandLandmarkCapture:
 
 def main():
     try:
-        app = HandLandmarkCapture()
+        app = Haptic()
         app.run()
     except Exception as e:
         print(f"Error: {str(e)}")
