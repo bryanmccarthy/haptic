@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 import random
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 class KeypointClassifier:
     def __init__(self, model_path=None, label_path=None):
@@ -212,27 +212,27 @@ class KeypointClassifier:
         print(f"Test loss: {loss:.4f}, Test accuracy: {accuracy:.4f}")
         
         # Plot training history
-        plt.figure(figsize=(12, 4))
+        # plt.figure(figsize=(12, 4))
         
-        plt.subplot(1, 2, 1)
-        plt.plot(history.history['accuracy'])
-        plt.plot(history.history['val_accuracy'])
-        plt.title('Model Accuracy')
-        plt.ylabel('Accuracy')
-        plt.xlabel('Epoch')
-        plt.legend(['Train', 'Validation'], loc='lower right')
+        # plt.subplot(1, 2, 1)
+        # plt.plot(history.history['accuracy'])
+        # plt.plot(history.history['val_accuracy'])
+        # plt.title('Model Accuracy')
+        # plt.ylabel('Accuracy')
+        # plt.xlabel('Epoch')
+        # plt.legend(['Train', 'Validation'], loc='lower right')
         
-        plt.subplot(1, 2, 2)
-        plt.plot(history.history['loss'])
-        plt.plot(history.history['val_loss'])
-        plt.title('Model Loss')
-        plt.ylabel('Loss')
-        plt.xlabel('Epoch')
-        plt.legend(['Train', 'Validation'], loc='upper right')
+        # plt.subplot(1, 2, 2)
+        # plt.plot(history.history['loss'])
+        # plt.plot(history.history['val_loss'])
+        # plt.title('Model Loss')
+        # plt.ylabel('Loss')
+        # plt.xlabel('Epoch')
+        # plt.legend(['Train', 'Validation'], loc='upper right')
         
-        plt.tight_layout()
-        plt.savefig('saved_landmarks/keypoint_classifier_training.png')
-        plt.close()
+        # plt.tight_layout()
+        # plt.savefig('saved_landmarks/keypoint_classifier_training.png')
+        # plt.close()
         
         return history
     

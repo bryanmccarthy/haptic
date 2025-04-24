@@ -4,6 +4,7 @@ import dearpygui.dearpygui as dpg
 import mediapipe as mp
 import os
 import csv
+from keypoint_classifier import KeypointClassifier
 
 class Haptic:
     def __init__(self):
@@ -27,6 +28,8 @@ class Haptic:
         self.display_width, self.display_height = 640, 360
         self.default_image = np.zeros((self.display_height, self.display_width, 4), dtype=np.uint8)
         
+        self.keypoint_classifier = KeypointClassifier()
+        
     def setup_gui(self):
         dpg.create_context()
 
@@ -46,6 +49,9 @@ class Haptic:
             dpg.add_button(label="Landmark Capture", 
                            callback=lambda: dpg.configure_item("landmark_capture_window", 
                                                              show=not dpg.is_item_visible("landmark_capture_window")))
+            dpg.add_button(label="Train", 
+                           callback=lambda: dpg.configure_item("train_window", 
+                                                             show=not dpg.is_item_visible("train_window")))
         
         # Create landmark capture window
         with dpg.window(label="Landmark Capture", tag="landmark_capture_window", width=300, height=200, show=True):
@@ -59,6 +65,11 @@ class Haptic:
                       height=self.display_height + 55, no_collapse=True):
             dpg.add_image("camera_texture")
             dpg.add_text("No gesture detected", tag="gesture_text")
+            
+        # Create train window
+        with dpg.window(label="Train", tag="train_window", width=300, height=200, show=True):
+            dpg.add_button(label="Train Classifier", callback=lambda: self.train_classifier())
+            dpg.add_text("", tag="training_status_text")
 
         # Register key press handler
         with dpg.handler_registry():
@@ -73,6 +84,7 @@ class Haptic:
         main_win_pos = dpg.get_item_pos("primary_window")
         dpg.set_item_pos("camera_window", [main_win_pos[0] + 350, main_win_pos[1] + 15])
         dpg.set_item_pos("landmark_capture_window", [main_win_pos[0] + 15, main_win_pos[1] + 220])
+        dpg.set_item_pos("train_window", [main_win_pos[0] + 15, main_win_pos[1] + 440])
 
     def on_key_press(self, sender, app_data):
         if app_data == 32:  # Space key
@@ -177,6 +189,30 @@ class Haptic:
             dpg.render_dearpygui_frame()
 
         self.cleanup()
+    
+    def train_classifier(self):
+        dpg.set_value("training_status_text", "Training...")
+
+        try:
+            file_path = "saved_landmarks/landmarks.csv"
+            keypoints, targets = self.keypoint_classifier.load_landmarks(file_path)
+            
+            if len(keypoints) == 0 or len(targets) == 0:
+                dpg.set_value("training_status_text", "No landmarks saved")
+                return
+                
+            dpg.set_value("training_status_text", f"Training with {len(keypoints)} samples, {len(np.unique(targets))} classes...")
+            
+            self.keypoint_classifier.train(keypoints, targets)
+            
+            self.keypoint_classifier.save()
+            
+            dpg.set_value("training_status_text", "Training completed.")
+        except Exception as e:
+            dpg.set_value("training_status_text", f"Training error: {str(e)}")
+            print(f"Error during training: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def cleanup(self):
         self.hands.close()
